@@ -1,0 +1,955 @@
+---
+title: "MSDS 6306 Project 2"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Introduction
+DDSAnalytics has asked us to look into their talent management solutions. We were given three data sets which included a wide variety of information from their existing employees (such as Salary, Job Roles, Age, etc.). We do not have the actual reason an employee chose to leave the company (or stay), however we were able to use the data given to create and validate an attrition classification model. Also we built a predictive model for an employee's monthly income.
+
+# Libraries
+```{r }
+library(leaps)
+library(plotROC)
+library(caret)
+library(mlr)
+library(gmodels)
+library(mosaic)
+library(ggmosaic)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+#library(SDMTools)
+library(readr)
+library(digest)
+library(ISLR)
+library(leaps)
+library( Matrix)
+library(foreach)
+library(glmnet)
+library(VIM)
+library(mice)
+library(corrgram)
+library(tidyverse)
+#library(limma)
+library(gridExtra)
+library(MASS)
+library(mvtnorm)
+library(class)
+library(e1071)
+
+library(ResourceSelection)
+library(car)
+
+library(mlbench)
+library(GGally)
+
+```
+
+
+## Load the data
+
+```{r }
+setwd("C:/Users/BelajiAvvaru/Desktop/Docs/Docs/SMU/MSDS 6306/Project 2/")
+ddsdata<-read.csv("CaseStudy2-data.csv",header=T)
+head(ddsdata)
+summary(ddsdata$Attrition)
+```
+
+
+# missing data
+```{r }
+#Display missing-data patterns
+md.pattern(ddsdata, plot=TRUE, rotate.names = TRUE)
+
+
+#Display missing-data in a bar-plot
+mice_plot <- aggr(ddsdata, col=c('navyblue','yellow'),
+                  numbers=TRUE, sortVars=TRUE,
+                  labels=names(ddsdata), cex.axis=.7,
+                  gap=3, ylab=c("Missing data","Pattern"))
+
+```
+## No missing values in the dataset
+
+
+## EDA on categorical variables
+## "Attrition"      "BusinessTravel" "Department"     "EducationField" "Gender"         "JobRole"       
+## "MaritalStatus"  "Over18"         "OverTime"       
+
+```{r }
+catnames = names(ddsdata)[sapply(ddsdata, class) == "factor"]
+
+catnames
+```
+
+```{r }
+## Summary on OverTime variable, 
+
+summary(ddsdata$OverTime)
+spineplot(x = ddsdata$OverTime, y = ddsdata$Attrition, xlab = "OverTime", ylab = "Attrition",
+          main = "OverTime vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$OverTime))
+
+CrossTable(ddsdata$OverTime, ddsdata$Attrition)
+
+chisq.test(ddsdata$OverTime, ddsdata$Attrition)
+
+
+#OverTime has some difference in "yes" and "no" among its categories. 
+#P-value of  Chi-Square Test suggests that the variable "OverTime" has a  relationship with response variable. We can     keep this variable for final analysis
+
+```
+
+    OverTime has some difference in "yes" and "no" among its categories. 
+    P-value of  Chi-Square Test suggests that the variable "OverTime" has a  relationship with response variable. We can     keep this variable for final analysis
+
+```{r }
+## Summary on Over18 variable, we can remove this varaible. all observations has value of "Y". This variable will not be useful in our analysis
+
+summary(ddsdata$Over18)
+spineplot(x = ddsdata$Over18, y = ddsdata$Attrition, xlab = "Over18", ylab = "Attrition",
+          main = "Over18 vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$Over18))
+
+CrossTable(ddsdata$Over18, ddsdata$Attrition)
+
+```
+
+```{r }
+## Summary on MaritalStatus variable
+
+summary(ddsdata$MaritalStatus)
+spineplot(x = ddsdata$MaritalStatus, y = ddsdata$Attrition, xlab = "MaritalStatus", ylab = "Attrition",
+          main = "MaritalStatus vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$MaritalStatus))
+
+CrossTable(ddsdata$MaritalStatus, ddsdata$Attrition)
+
+chisq.test(ddsdata$MaritalStatus, ddsdata$Attrition)
+
+#MaritalStatus has some difference in "yes" and "no" among its categories. Married with 47.1%, Single with 30.9% and      divorced with 22%
+#P-value of  Chi-Square Test suggests that the variable "MaritalStatus" has a  relationship with response variable. We    can keep this variable for final analysis
+
+```
+
+
+```{r }
+## Summary on JobRole variable
+
+summary(ddsdata$JobRole)
+spineplot(x = ddsdata$JobRole, y = ddsdata$Attrition, xlab = "JobRole", ylab = "Attrition",
+          main = "JobRole vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$JobRole))
+
+CrossTable(ddsdata$JobRole, ddsdata$Attrition)
+
+chisq.test(ddsdata$JobRole, ddsdata$Attrition)
+
+## JobRole has some difference in "yes" and "no" among its categories. Sales Executive at 23% and Human resource at 3.1%
+## P-value of  Chi-Square Test suggests that the variable "JobRole" has a  relationship with response variable. We can keep this variable for final analysis
+
+```
+
+
+```{r }
+## Summary on Gender variable
+
+summary(ddsdata$Gender)
+spineplot(x = ddsdata$Gender, y = ddsdata$Attrition, xlab = "Gender", ylab = "Attrition",
+          main = "Gender vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$Gender))
+
+CrossTable(ddsdata$Gender, ddsdata$Attrition)
+
+chisq.test(ddsdata$Gender, ddsdata$Attrition)
+
+## Gender has no difference in "yes" and "no" among its categories. pretty much both categories with around 85% and 15% of "no" and "yes" respectively 
+## P-value of  Chi-Square Test suggests that the variable "Gender" has no relationship with response variable. We can remove this variable for final analysis
+
+```
+
+
+
+```{r }
+## Summary on EducationField variable
+
+summary(ddsdata$EducationField)
+spineplot(x = ddsdata$EducationField, y = ddsdata$Attrition, xlab = "EducationField", ylab = "Attrition",
+          main = "EducationField vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$EducationField))
+
+CrossTable(ddsdata$EducationField, ddsdata$Attrition)
+
+chisq.test(ddsdata$EducationField, ddsdata$Attrition)
+
+## EducationField has difference in "yes" and "no" among its categories. 
+## But P-value of  Chi-Square Test suggests that the variable "EducationField" has no relationship with response variable. We can remove this variable for final analysis
+
+```
+
+```{r }
+## Summary on Department variable
+
+summary(ddsdata$Department)
+spineplot(x = ddsdata$Department, y = ddsdata$Attrition, xlab = "Department", ylab = "Attrition",
+          main = "Department vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$Department))
+
+CrossTable(ddsdata$Department, ddsdata$Attrition)
+
+chisq.test(ddsdata$Department, ddsdata$Attrition)
+
+## Department has difference in "yes" and "no" among its categories. 
+## But P-value of  Chi-Square Test suggests that the variable "Department" has a relationship with response variable. We can keep this variable for final analysis
+
+```
+
+
+```{r }
+## Summary on BusinessTravel variable
+
+summary(ddsdata$BusinessTravel)
+spineplot(x = ddsdata$BusinessTravel, y = ddsdata$Attrition, xlab = "BusinessTravel", ylab = "Attrition",
+          main = "BusinessTravel vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$BusinessTravel))
+
+CrossTable(ddsdata$BusinessTravel, ddsdata$Attrition)
+
+chisq.test(ddsdata$BusinessTravel, ddsdata$Attrition)
+
+## BusinessTravel has difference in "yes" and "no" among its categories. 
+## But P-value of  Chi-Square Test suggests that the variable "BusinessTravel" has a relationship with response variable. We can keep this variable for final analysis
+
+```
+
+
+
+# Observations
+Based on the Bar plots and Chi-squared test, following variables are significant with response variable
+BusinessTravel
+Department
+JobRole
+MaritalStatus
+OverTime
+
+
+```{r}
+
+####Some of the variables are interger variables, but these variables should actually be categorical and therefore will be converted to factors
+
+ddsdata$Education <- as.factor(ddsdata$Education)
+ddsdata$EnvironmentSatisfaction <- as.factor(ddsdata$EnvironmentSatisfaction)
+ddsdata$JobInvolvement <- as.factor(ddsdata$JobInvolvement)
+ddsdata$JobLevel <- as.factor(ddsdata$JobLevel)
+ddsdata$JobSatisfaction <- as.factor(ddsdata$JobSatisfaction)
+ddsdata$PerformanceRating <- as.factor(ddsdata$PerformanceRating)
+ddsdata$RelationshipSatisfaction <- as.factor(ddsdata$RelationshipSatisfaction)
+ddsdata$StockOptionLevel <- as.factor(ddsdata$StockOptionLevel)
+ddsdata$TrainingTimesLastYear <- as.factor(ddsdata$TrainingTimesLastYear)
+ddsdata$WorkLifeBalance <- as.factor(ddsdata$WorkLifeBalance)
+
+```
+
+```{r }
+## Summary on Education variable
+
+summary(ddsdata$Education)
+spineplot(x = ddsdata$Education, y = ddsdata$Attrition, xlab = "Education", ylab = "Attrition",
+          main = "Education vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$Education))
+
+CrossTable(ddsdata$Education, ddsdata$Attrition)
+
+chisq.test(ddsdata$Education, ddsdata$Attrition)
+
+## Education has difference in "yes" and "no" among its categories. 
+## But P-value of  Chi-Square Test suggests that the variable "Education" has no relationship with response variable. We can remove this variable for final analysis
+
+```
+
+
+
+```{r }
+## Summary on EnvironmentSatisfaction variable
+
+summary(ddsdata$EnvironmentSatisfaction)
+spineplot(x = ddsdata$EnvironmentSatisfaction, y = ddsdata$Attrition, xlab = "EnvironmentSatisfaction", ylab = "Attrition",
+          main = "EnvironmentSatisfaction vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$EnvironmentSatisfaction))
+
+CrossTable(ddsdata$EnvironmentSatisfaction, ddsdata$Attrition)
+
+chisq.test(ddsdata$EnvironmentSatisfaction, ddsdata$Attrition)
+
+## EnvironmentSatisfaction has difference in "yes" and "no" among its categories. 
+## But P-value of  Chi-Square Test suggests that the variable "EnvironmentSatisfaction" has a relationship with response variable. We can keep this variable for final analysis
+```
+
+
+
+
+```{r }
+## Summary on JobInvolvement variable
+
+summary(ddsdata$JobInvolvement)
+spineplot(x = ddsdata$JobInvolvement, y = ddsdata$Attrition, xlab = "JobInvolvement", ylab = "Attrition",
+          main = "JobInvolvement vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$JobInvolvement))
+
+CrossTable(ddsdata$JobInvolvement, ddsdata$Attrition)
+
+chisq.test(ddsdata$JobInvolvement, ddsdata$Attrition)
+
+## JobInvolvement has difference in "yes" and "no" among its categories. 
+## But P-value of  Chi-Square Test suggests that the variable "JobInvolvement" has a relationship with response variable. We can keep this variable for final analysis
+
+```
+
+
+
+```{r }
+## Summary on JobLevel variable
+
+summary(ddsdata$JobLevel)
+spineplot(x = ddsdata$JobLevel, y = ddsdata$Attrition, xlab = "JobLevel", ylab = "Attrition",
+          main = "JobLevel vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$JobLevel))
+
+CrossTable(ddsdata$JobLevel, ddsdata$Attrition)
+
+chisq.test(ddsdata$JobLevel, ddsdata$Attrition)
+
+## JobLevel has difference in "yes" and "no" among its categories. 
+## But P-value of  Chi-Square Test suggests that the variable "JobLevel" has a relationship with response variable. We can keep this variable for final analysis
+
+```
+
+
+```{r }
+## Summary on JobSatisfaction variable
+
+summary(ddsdata$JobSatisfaction)
+spineplot(x = ddsdata$JobSatisfaction, y = ddsdata$Attrition, xlab = "JobSatisfaction", ylab = "Attrition",
+          main = "JobSatisfaction vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$JobSatisfaction))
+
+CrossTable(ddsdata$JobSatisfaction, ddsdata$Attrition)
+
+chisq.test(ddsdata$JobSatisfaction, ddsdata$Attrition)
+
+## JobSatisfaction has difference in "yes" and "no" among its categories. 
+## But P-value of  Chi-Square Test suggests that the variable "JobSatisfaction" has a relationship with response variable. We can keep this variable for final analysis
+
+```
+
+
+```{r }
+## Summary on PerformanceRating variable
+
+summary(ddsdata$PerformanceRating)
+spineplot(x = ddsdata$PerformanceRating, y = ddsdata$Attrition, xlab = "PerformanceRating", ylab = "Attrition",
+          main = "PerformanceRating vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$PerformanceRating))
+
+CrossTable(ddsdata$PerformanceRating, ddsdata$Attrition)
+
+chisq.test(ddsdata$PerformanceRating, ddsdata$Attrition)
+
+## PerformanceRating has difference in "yes" and "no" among its categories. 
+## But P-value of  Chi-Square Test suggests that the variable "PerformanceRating" has no relationship with response variable. We can remove this variable for final analysis
+
+```
+
+
+```{r }
+## Summary on RelationshipSatisfaction variable
+
+summary(ddsdata$RelationshipSatisfaction)
+spineplot(x = ddsdata$RelationshipSatisfaction, y = ddsdata$Attrition, xlab = "RelationshipSatisfaction", ylab = "Attrition",
+          main = "RelationshipSatisfaction vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$RelationshipSatisfaction))
+
+CrossTable(ddsdata$RelationshipSatisfaction, ddsdata$Attrition)
+
+chisq.test(ddsdata$RelationshipSatisfaction, ddsdata$Attrition)
+
+## RelationshipSatisfaction has difference in "yes" and "no" among its categories. 
+## But P-value of  Chi-Square Test suggests that the variable "RelationshipSatisfaction" has no relationship with response variable. We can remove this variable for final analysis
+
+```
+
+
+
+```{r }
+## Summary on StockOptionLevel variable
+
+summary(ddsdata$StockOptionLevel)
+spineplot(x = ddsdata$StockOptionLevel, y = ddsdata$Attrition, xlab = "StockOptionLevel", ylab = "Attrition",
+          main = "StockOptionLevel vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$StockOptionLevel))
+
+CrossTable(ddsdata$StockOptionLevel, ddsdata$Attrition)
+
+chisq.test(ddsdata$StockOptionLevel, ddsdata$Attrition)
+
+## StockOptionLevel has difference in "yes" and "no" among its categories. 
+## But P-value of  Chi-Square Test suggests that the variable "StockOptionLevel" has a relationship with response variable. We can keep this variable for final analysis
+
+```
+
+
+
+```{r }
+## Summary on TrainingTimesLastYear variable
+
+summary(ddsdata$TrainingTimesLastYear)
+spineplot(x = ddsdata$TrainingTimesLastYear, y = ddsdata$Attrition, xlab = "TrainingTimesLastYear", ylab = "Attrition",
+          main = "TrainingTimesLastYear vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$TrainingTimesLastYear))
+
+CrossTable(ddsdata$TrainingTimesLastYear, ddsdata$Attrition)
+
+chisq.test(ddsdata$TrainingTimesLastYear, ddsdata$Attrition)
+
+## TrainingTimesLastYear has difference in "yes" and "no" among its categories. 
+## But P-value of  Chi-Square Test suggests that the variable "TrainingTimesLastYear" has no relationship with response variable. We can remove this variable for final analysis
+
+```
+
+
+```{r }
+## Summary on WorkLifeBalance variable
+
+summary(ddsdata$WorkLifeBalance)
+spineplot(x = ddsdata$WorkLifeBalance, y = ddsdata$Attrition, xlab = "WorkLifeBalance", ylab = "Attrition",
+          main = "WorkLifeBalance vs Attrition", col = c("lightblue", "coral"), xaxlabels = levels(ddsdata$WorkLifeBalance))
+
+CrossTable(ddsdata$WorkLifeBalance, ddsdata$Attrition)
+
+chisq.test(ddsdata$WorkLifeBalance, ddsdata$Attrition)
+
+## WorkLifeBalance has difference in "yes" and "no" among its categories. 
+## But P-value of  Chi-Square Test suggests that the variable "WorkLifeBalance" has a relationship with response variable. We can keep this variable for final analysis
+
+```
+
+
+# Observations
+Based on the Bar plots and Chi-squared test, following variables are significant with response variable
+EnvironmentSatisfaction
+JobInvolvement
+JobLevel
+JobSatisfaction
+StockOptionLevel
+WorkLifeBalance
+
+#Based on low p-values, following variables appear to have the strongest impact on employee attrition:
+Overtime (p = 1.024e-15)
+Stock Option Level (p = 3.724e-12)
+Job Involvement (p = 5.211e-09)
+Job Level (p = 2.085e-08)
+Marital Status (p = 3.379e-08)
+
+## EDA on continuous variables
+
+```{r }
+
+
+contnames = names(ddsdata)[sapply(ddsdata, class) == "integer" | sapply(ddsdata, class) == "numeric"]
+
+contnames
+```
+
+## EmployeeCount, Over18, StandardHours, EmployeeNumber, ID are not significant continuous varaibles 
+
+
+# Performing pairwise plots with color coding by response which will help in identify any relationships  
+```{r fig.height = 10, fig.width = 10}
+ddsdata %>% dplyr::select(Age, DailyRate, DistanceFromHome, HourlyRate, MonthlyIncome, MonthlyRate, NumCompaniesWorked, PercentSalaryHike,TotalWorkingYears,YearsAtCompany, YearsInCurrentRole, YearsSinceLastPromotion, YearsWithCurrManager, Attrition) %>% ggpairs(aes(color = Attrition)) %>% print(progress=F)
+
+```
+
+
+## Observations
+Looks like YearsWithCurrManager YearsInCurrentRole monthlyincome and TotalWorkingYears appears to be has a relationship with response variable Attrition
+
+## Checking multicolliniarity with Correlation plot
+```{r}
+ddsdata_cont = ddsdata %>% dplyr::select(c('Age', 'DailyRate', 'DistanceFromHome', 'HourlyRate', 'MonthlyIncome', 'MonthlyRate', 'NumCompaniesWorked', 'PercentSalaryHike','TotalWorkingYears','YearsAtCompany', 'YearsInCurrentRole', 'YearsSinceLastPromotion', 'YearsWithCurrManager')) 
+
+#correlation plot for all continuous variables
+corrgram(ddsdata_cont, order=TRUE,
+         upper.panel=panel.cor, lower.panel=panel.pie, main="DDS data Correlogram")
+
+round(cor(ddsdata_cont, use="pair"),2)
+
+```
+
+
+## Below variables are highly corrected with each other
+
+# YearsWithCurrManager  		    YearsInCurrentRole  0.71
+# YearsWithCurrManager  		    YearsAtCompany  0.77
+# YearsAtCompany                YearsInCurrentRole  0.78 
+# TotalWorkingYears	            MonthlyIncome       0.78
+
+
+# Creating a balanced dataset
+## First of all let's create a new dataset with our class balanced with oversampling   
+## Splitting the data into training and test datasets (70-30 split)
+```{r}
+set.seed(1008)
+ddsdata_new = ddsdata %>% dplyr::select(-c('Attrition', 'EmployeeCount', 'Over18', 'StandardHours', 'EmployeeNumber', 'ID'))
+
+#ddsdata_new = ddsdata %>% dplyr::select(-c('Attrition'))
+ddsdata_resp = ddsdata$Attrition
+ddsdata_new = cbind(ddsdata_new, ddsdata_resp)
+colnames(ddsdata_new)[31] <- "Attrition"
+
+# dataset with "no"
+ddsdata_no = ddsdata_new[which(ddsdata_new$Attrition =="No"),]
+# dataset with "yes"
+ddsdata_yes = ddsdata_new[which(ddsdata_new$Attrition =="Yes"),]
+
+splitPerc = .7 #Training / Test split Percentage
+
+# Training / Test split of "no" dataset
+noIndices = sample(1:dim(ddsdata_no)[1],round(splitPerc * dim(ddsdata_no)[1]))
+train_no = ddsdata_no[noIndices,]
+test_no = ddsdata_no[-noIndices,]
+
+# Training / Test split of "yes" dataset
+yesIndices = sample(1:dim(ddsdata_yes)[1],round(splitPerc * dim(ddsdata_yes)[1]))
+train_yes = ddsdata_yes[yesIndices,]
+test_yes = ddsdata_yes[-yesIndices,]
+
+# Combine training "no" and "yes"
+ddsdata_train = rbind(train_no, train_yes)
+
+# Combine test "no" and "yes"
+ddsdata_test = rbind(test_no, test_yes)
+
+# upsampling training dataset
+ddsdata_train_upsample <- upSample(x = ddsdata_train[, -ncol(ddsdata_train)], y = ddsdata_train$Attrition)
+colnames(ddsdata_train_upsample)[31] <- "Attrition"
+str(ddsdata_train_upsample$Attrition)
+
+```
+
+## logistic regression model - Attrition 
+
+```{r}
+model.main<-glm(Attrition ~ . , data=ddsdata_train_upsample,family = binomial(link="logit"))
+(vif(model.main)[,3])^2
+
+## Remove below variable that has VIF more than 10  and refit the model
+## Department  - 6524.72
+
+
+ddsdata_train_upsample_new = ddsdata_train_upsample %>% dplyr::select(-c('Department'))
+
+model.main1<-glm(Attrition ~ . , data=ddsdata_train_upsample_new,family = binomial(link="logit"))
+
+(vif(model.main1)[,3])^2
+summary(model.main1)
+
+## Removed below statistically not significant variables and refit the model
+#DailyRate                        
+#Education  
+#EducationField
+#HourlyRate 
+#Gender
+#JobLevel       
+#MonthlyIncome                    
+#MonthlyRate                     
+   
+
+ddsdata_train_upsample_new1 = ddsdata_train_upsample_new %>% dplyr::select(-c('Education', 'EducationField', 'HourlyRate', 'JobLevel', 'MonthlyIncome', 'MonthlyRate', 'DailyRate', 'Gender'))
+
+model.main2<-glm(Attrition ~ . , data=ddsdata_train_upsample_new1,family = binomial(link="logit"))
+
+(vif(model.main2)[,3])^2
+summary(model.main2)
+
+exp(cbind("Odds ratio" = coef(model.main2), confint.default(model.main2, level = 0.95)))
+
+```
+
+# Lack of fit test - Hosmer Lemeshow test to check the lack of fit. 
+
+We then run the Hosmer Lemeshow test to check the lack of fit. And the Hosmer Lemeshow test looks fine since p-value > 0.05. Hence, we conclude that the model is a good fit.
+
+```{r, echo = FALSE}
+hoslem.test(model.main2$y, fitted(model.main2), g=10) # it is ok
+
+```
+
+# Residual diagnostics  - Plots here help us examine Cook's D graph:
+```{r, echo = FALSE}
+plot(model.main2)
+```
+
+When checking Cook’s D plot, if observations are outside the Cook’s distance (meaning they have a high Cook’s distance score) the observations are influential to the regression results. In this case, from the Cook’s D plot above, we do not see any influential points.
+
+
+# Confusion Matrix for Training and test datasets and ROC plot
+```{r }
+
+model.main2<-glm(Attrition ~ . , data=ddsdata_train_upsample_new1,family = binomial(link="logit"))
+
+summary(model.main2)
+
+
+bal.pred_probs <- predict(model.main2, ddsdata_train_upsample_new1, type="response")
+bal.pred_yns <- factor(ifelse(bal.pred_probs>0.5, "Yes", "No"))
+bal.cm <- confusionMatrix(table(bal.pred_yns, ddsdata_train_upsample_new1$Attrition))
+
+bal.cm
+
+
+bal.pred_probs.test <- predict(model.main2, ddsdata_test, type="response")
+bal.pred_yns.test <- factor(ifelse(bal.pred_probs.test>0.5, "Yes", "No"))
+bal.cm.test <- confusionMatrix(table(bal.pred_yns.test, ddsdata_test$Attrition))
+
+bal.cm.test
+
+df <- rbind(data.frame(predictor = predict(model.main2, ddsdata_train_upsample_new1),
+                       known.truth = ddsdata_train_upsample_new1$Attrition,
+                       model = "Train"),
+            data.frame(predictor = predict(model.main2, ddsdata_test),
+                       known.truth = ddsdata_test$Attrition,
+                       model = "Test"))
+
+# the aesthetic names are not the most intuitive
+# `d` holds the known truth
+# `m` holds the predictor values 
+
+ggroc <- ggplot(df, aes(d = known.truth, m = predictor, color = model)) + 
+  geom_roc(n.cuts = 0) + geom_abline(intercept = 0, slope = 1, linetype='dashed') 
+
+calc_auc(ggroc)
+
+ggroc
+
+
+```
+
+
+## Model 3 is the best classification model and will be used for identifying attrition.
+- This model is 84.24% accurate on the training set and 81.238% accurate on the test set.
+The training and test set sensitivity (correctly estimate true attrition) is:
+-     Training: 82.19%
+-     Test: 82.65% 
+- The training and test set specificity (correctly estimate employees who did not leave) is:
+-     Training: 86.30% 
+-     Test: 73.81%
+
+## Predicting Attrition for Dataset with no Attrition
+```{r}
+
+ddsdata_pred<-read.csv("CaseStudy2CompSet No Attrition.csv",header=T)
+
+ddsdata_pred$Education <- as.factor(ddsdata_pred$Education)
+ddsdata_pred$EnvironmentSatisfaction <- as.factor(ddsdata_pred$EnvironmentSatisfaction)
+ddsdata_pred$JobInvolvement <- as.factor(ddsdata_pred$JobInvolvement)
+ddsdata_pred$JobLevel <- as.factor(ddsdata_pred$JobLevel)
+ddsdata_pred$JobSatisfaction <- as.factor(ddsdata_pred$JobSatisfaction)
+ddsdata_pred$PerformanceRating <- as.factor(ddsdata_pred$PerformanceRating)
+ddsdata_pred$RelationshipSatisfaction <- as.factor(ddsdata_pred$RelationshipSatisfaction)
+ddsdata_pred$StockOptionLevel <- as.factor(ddsdata_pred$StockOptionLevel)
+ddsdata_pred$TrainingTimesLastYear <- as.factor(ddsdata_pred$TrainingTimesLastYear)
+ddsdata_pred$WorkLifeBalance <- as.factor(ddsdata_pred$WorkLifeBalance)
+
+
+ddsdata_pred_new = ddsdata_pred %>% dplyr::select(-c('Education', 'EducationField', 'HourlyRate', 'JobLevel', 'MonthlyIncome', 'MonthlyRate', 'DailyRate', 'Gender', 'Department', 'EmployeeCount', 'Over18', 'StandardHours', 'EmployeeNumber'))
+
+
+#Predicting Attrition for Dataset with no Attrition
+PredictedAT <- predict(model.main2,newdata = ddsdata_pred_new,type = 'response')
+ddsdata_pred_new$Attrition <- PredictedAT
+ddsdata_pred_new$Attrition <- factor(ifelse(ddsdata_pred_new$Attrition>0.5, "Yes", "No"))
+head(ddsdata_pred_new)
+dim(ddsdata_pred_new)
+#Exporting Results to .csv
+write.csv(ddsdata_pred_new[,c(1,23)],"Case2Predictions Attrition.csv")
+
+```
+
+
+# Attrition by Job Role
+
+Let's analyze job role versus attrition to see if we can identify any patterns.  By simply looking a the count of attrition by job role, it looks like Sales Eecutive, Research Scientist and Labratory Technician roles have highest attrition by count.  However, this is misleading as there are a lot more people in those roles. Let's look at attrition as a percent of people to give a more accurate picture of what's going on.
+```{r}
+
+ddsdata %>% ggplot(mapping=aes(x=JobRole, fill=Attrition)) + geom_bar() + coord_flip() + ggtitle("Attrition By Job Role") + xlab("Count by Job Role") + ylab("Job Role")
+
+```
+
+Now, when we see count plot of attrition as a percent by each role, we get a different picture.  We see that the top roles for attrition are:
+  + Sales Representative  (45.3%)
+  + Human Resources (22.2%)
+  + Laboratory Techician (19.6)
+
+```{r fig.height = 8, fig.width = 12}
+CrossTable(ddsdata$JobRole, ddsdata$Attrition)
+```
+
+
+
+# Linear Regression model - Montly Income
+
+## Model selection "Forward" and train and test Plot
+```{r }
+set.seed(1234)
+reg.fwd=regsubsets(MonthlyIncome~., data=ddsdata_train_upsample, method="forward", nvmax=20)
+
+reg.fwd
+predict.regsubsets =function (object , newdata ,id ,...){
+  form=as.formula (object$call [[2]])
+  mat=model.matrix(form ,newdata )
+  coefi=coef(object ,id=id)
+  xvars=names(coefi)
+  mat[,xvars]%*%coefi
+}
+
+testASE<-c()
+#note my index is to 20 since that what I set it in regsubsets
+for (i in 1:20){
+  predictions<-predict.regsubsets(object=reg.fwd,newdata=ddsdata_test,id=i) 
+  testASE[i]<-mean((ddsdata_test$MonthlyIncome-predictions)^2)
+}
+
+par(mfrow=c(1,1))
+plot(1:20,testASE,type="l",xlab="# of predictors",ylab="Test vs Train MSE")
+index<-which(testASE==min(testASE))
+points(index,testASE[index],col="red",pch=10)
+rss<-summary(reg.fwd)$rss
+lines(1:20,rss/1022,lty=3,col="blue") 
+```
+
+## BIC, adj R-squared and RSS plots for forward selection
+
+```{r }
+par(mfrow=c(1,3))
+bics<-summary(reg.fwd)$bic
+plot(1:20,bics,type="l",ylab="BIC",xlab="# of predictors")
+index<-which(bics==min(bics))
+points(index,bics[index],col="red",pch=10)
+
+adjr2<-summary(reg.fwd)$adjr2
+plot(1:20,adjr2,type="l",ylab="Adjusted R-squared",xlab="# of predictors")
+index<-which(adjr2==max(adjr2))
+points(index,adjr2[index],col="red",pch=10)
+
+rss<-summary(reg.fwd)$rss
+plot(1:20,rss,type="l",ylab="train RSS",xlab="# of predictors")
+index<-which(rss==min(rss))
+points(index,rss[index],col="red",pch=10)
+``` 
+
+## Pick up the model
+```{r }
+m1<-coef(reg.fwd,14)
+m1
+
+fwd.Model1 = lm(MonthlyIncome~ BusinessTravel+TotalWorkingYears + JobRole + JobLevel+TrainingTimesLastYear+YearsSinceLastPromotion , data=ddsdata_train_upsample)
+
+summary(fwd.Model1)
+
+```
+
+## Let's check the residual Sum of Squares, Mean Squared Error and Root Mean Squared Error for forward selection model
+```{r}
+#residual sum of squares
+fwd.RSS = c(crossprod(fwd.Model1$residuals))
+fwd.RSS
+#Mean Squared Error
+fwd.MSE = fwd.RSS / length(fwd.Model1$residuals)
+fwd.MSE
+#Root MSE
+fwd.RMSE = sqrt(fwd.MSE)
+fwd.RMSE
+
+fwd.pred<-predict(fwd.Model1, newdata=ddsdata_test)
+TestMSE<-mean((ddsdata_test$MonthlyIncome-fwd.pred)^2)
+
+TESTRMSE = sqrt(TestMSE)
+TESTRMSE
+
+```
+
+
+# Model selection "backward" and train and test Plot
+```{r }
+reg.bkd=regsubsets(MonthlyIncome~., data=ddsdata_train_upsample, method="backward", nvmax=20)
+str(ddsdata_train_upsample)
+reg.bkd
+predict.regsubsets =function (object , newdata ,id ,...){
+  form=as.formula (object$call [[2]])
+  mat=model.matrix(form ,newdata )
+  coefi=coef(object ,id=id)
+  xvars=names(coefi)
+  mat[,xvars]%*%coefi
+}
+
+testASE<-c()
+#note my index is to 20 since that what I set it in regsubsets
+for (i in 1:20){
+  predictions<-predict.regsubsets(object=reg.bkd,newdata=ddsdata_test,id=i) 
+  testASE[i]<-mean((ddsdata_test$MonthlyIncome-predictions)^2)
+}
+
+par(mfrow=c(1,1))
+plot(1:20,testASE,type="l",xlab="# of predictors",ylab="Test vs Train MSE")
+index<-which(testASE==min(testASE))
+points(index,testASE[index],col="red",pch=10)
+rss<-summary(reg.bkd)$rss
+lines(1:20,rss/1022,lty=3,col="blue") 
+
+```
+
+## BIC, adj R-squared and RSS plots for backward selection
+
+```{r }
+par(mfrow=c(1,3))
+bics<-summary(reg.bkd)$bic
+plot(1:20,bics,type="l",ylab="BIC",xlab="# of predictors")
+index<-which(bics==min(bics))
+points(index,bics[index],col="red",pch=10)
+
+adjr2<-summary(reg.bkd)$adjr2
+plot(1:20,adjr2,type="l",ylab="Adjusted R-squared",xlab="# of predictors")
+index<-which(adjr2==max(adjr2))
+points(index,adjr2[index],col="red",pch=10)
+
+rss<-summary(reg.bkd)$rss
+plot(1:20,rss,type="l",ylab="train RSS",xlab="# of predictors")
+index<-which(rss==min(rss))
+points(index,rss[index],col="red",pch=10)
+``` 
+
+## Pick up the model
+```{r }
+m1<-coef(reg.bkd, 11)
+m1
+
+bkd.Model1 = lm(MonthlyIncome~ TotalWorkingYears + JobRole + JobLevel , data=ddsdata_train_upsample)
+summary(bkd.Model1)
+
+```
+
+## Let's check the residual Sum of Squares, Mean Squared Error and Root Mean Squared Error for backward selection model
+```{r}
+#residual sum of squares
+bkd.RSS = c(crossprod(bkd.Model1$residuals))
+bkd.RSS
+#Mean Squared Error
+bkd.MSE = bkd.RSS / length(bkd.Model1$residuals)
+bkd.MSE
+#Root MSE
+bkd.RMSE = sqrt(bkd.MSE)
+bkd.RMSE
+
+bkd.pred<-predict(bkd.Model1, newdata=ddsdata_test)
+bkd.TestMSE<-mean((ddsdata_test$MonthlyIncome-bkd.pred)^2)
+
+bkd.TESTRMSE = sqrt(bkd.TestMSE)
+bkd.TESTRMSE
+
+```
+
+
+# Model selection "stepwise" and train and test Plot
+```{r }
+reg.stp=regsubsets(MonthlyIncome~., data=ddsdata_train_upsample, method="seqrep", nvmax=20)
+
+reg.stp
+predict.regsubsets =function (object , newdata ,id ,...){
+  form=as.formula (object$call [[2]])
+  mat=model.matrix(form ,newdata )
+  coefi=coef(object ,id=id)
+  xvars=names(coefi)
+  mat[,xvars]%*%coefi
+}
+
+testASE<-c()
+#note my index is to 20 since that what I set it in regsubsets
+for (i in 1:20){
+  predictions<-predict.regsubsets(object=reg.stp,newdata=ddsdata_test,id=i) 
+  testASE[i]<-mean((ddsdata_test$MonthlyIncome-predictions)^2)
+}
+
+par(mfrow=c(1,1))
+plot(1:20,testASE,type="l",xlab="# of predictors",ylab="Test vs Train MSE")
+index<-which(testASE==min(testASE))
+points(index,testASE[index],col="red",pch=10)
+rss<-summary(reg.stp)$rss
+lines(1:20,rss/1022,lty=3,col="blue") 
+
+```
+
+## BIC, adj R-squared and RSS plots for stepwise selection
+
+```{r }
+par(mfrow=c(1,3))
+bics<-summary(reg.stp)$bic
+plot(1:20,bics,type="l",ylab="BIC",xlab="# of predictors")
+index<-which(bics==min(bics))
+points(index,bics[index],col="red",pch=10)
+
+adjr2<-summary(reg.stp)$adjr2
+plot(1:20,adjr2,type="l",ylab="Adjusted R-squared",xlab="# of predictors")
+index<-which(adjr2==max(adjr2))
+points(index,adjr2[index],col="red",pch=10)
+
+rss<-summary(reg.stp)$rss
+plot(1:20,rss,type="l",ylab="train RSS",xlab="# of predictors")
+index<-which(rss==min(rss))
+points(index,rss[index],col="red",pch=10)
+``` 
+
+## Pick up the model
+```{r }
+
+m1<-coef(reg.stp, 12)
+m1
+
+stp.Model1 = lm(MonthlyIncome~ BusinessTravel+TotalWorkingYears + JobRole + JobLevel, data=ddsdata_train_upsample)
+
+summary(bkd.Model1)
+
+```
+
+## Let's check the residual Sum of Squares, Mean Squared Error and Root Mean Squared Error for stepwise selection model
+```{r}
+#residual sum of squares
+stp.RSS = c(crossprod(stp.Model1$residuals))
+stp.RSS
+#Mean Squared Error
+stp.MSE = stp.RSS / length(stp.Model1$residuals)
+stp.MSE
+#Root MSE
+stp.RMSE = sqrt(stp.MSE)
+stp.RMSE
+
+stp.pred<-predict(stp.Model1, newdata=ddsdata_test)
+stp.TestMSE<-mean((ddsdata_test$MonthlyIncome-stp.pred)^2)
+
+stp.TESTRMSE = sqrt(stp.TestMSE)
+stp.TESTRMSE
+
+```
+
+#The Backward Selection Model has the lowest RMSE with the highest R2 at 11 Predictors. We will be going forward with this model to do predictions
+
+##Predicting Montly Income for Validation Dataset
+```{r IncomePredict}
+#ddsdata_Income_pred <-read.xlsx(file.choose(), header = TRUE)
+dsdata_Income_pred<-read.csv("CaseStudy2CompSet No Salary.csv",header=T)
+
+dsdata_Income_pred$Education <- as.factor(dsdata_Income_pred$Education)
+dsdata_Income_pred$EnvironmentSatisfaction <- as.factor(dsdata_Income_pred$EnvironmentSatisfaction)
+dsdata_Income_pred$JobInvolvement <- as.factor(dsdata_Income_pred$JobInvolvement)
+dsdata_Income_pred$JobLevel <- as.factor(dsdata_Income_pred$JobLevel)
+dsdata_Income_pred$JobSatisfaction <- as.factor(dsdata_Income_pred$JobSatisfaction)
+dsdata_Income_pred$PerformanceRating <- as.factor(dsdata_Income_pred$PerformanceRating)
+dsdata_Income_pred$RelationshipSatisfaction <- as.factor(dsdata_Income_pred$RelationshipSatisfaction)
+dsdata_Income_pred$StockOptionLevel <- as.factor(dsdata_Income_pred$StockOptionLevel)
+dsdata_Income_pred$TrainingTimesLastYear <- as.factor(dsdata_Income_pred$TrainingTimesLastYear)
+dsdata_Income_pred$WorkLifeBalance <- as.factor(dsdata_Income_pred$WorkLifeBalance)
+
+#Predicting Income for Validation Data
+Income_Predictions <- predict(bkd.Model1, newdata = dsdata_Income_pred)
+dsdata_Income_pred$MonthlyIncome <- Income_Predictions
+#Exporting Results to .csv
+write.csv(dsdata_Income_pred[,c(1,36)],"Case2Predictions Salary.csv")
+```
