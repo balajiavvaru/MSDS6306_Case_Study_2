@@ -11,8 +11,8 @@ This folder is used to display our plots and tables in a presentation related fo
 PPT  
 This folder is used for our PPT presentation slide deck
 
-CodeBook  
-This folder contains descriptive information regarding the variables, attributes, and data used
-
 Data  
 This folder contains the data set  used for analysis and two datasets used for predicting Attrition and Monthly Income
+
+Predicted Files 
+This folder contains the data sets with predicted values for Attrition and monthly income 
