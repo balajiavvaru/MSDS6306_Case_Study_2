@@ -1,0 +1,24 @@
+---
+title: "codebook"
+author: "Balaji Avvaru"
+date: "4/16/2020"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries
+```{r }
+library(codebook)
+```
+## Load the data
+
+```{r}
+setwd("C:/Users/BelajiAvvaru/Desktop/Docs/Docs/SMU/MSDS 6306/Project 2/")
+ddsdata<-read.csv("CaseStudy2-data.csv",header=T)
+codebook(ddsdata)
+```
