@@ -62,6 +62,8 @@ summary(ddsdata$Attrition)
 ```
 
 
+
+
 # missing data
 ```{r }
 #Display missing-data patterns
@@ -929,7 +931,7 @@ stp.TESTRMSE
 
 ```
 
-#The Backward Selection Model has the lowest RMSE with the highest R2 at 11 Predictors. We will be going forward with this model to do predictions
+#The Foward Selection Model has the lowest RMSE with the highest R2 at 15 Predictors. We will be going forward with this model to do predictions
 
 ##Predicting Montly Income for Validation Dataset
 ```{r IncomePredict}
@@ -948,7 +950,7 @@ dsdata_Income_pred$TrainingTimesLastYear <- as.factor(dsdata_Income_pred$Trainin
 dsdata_Income_pred$WorkLifeBalance <- as.factor(dsdata_Income_pred$WorkLifeBalance)
 
 #Predicting Income for Validation Data
-Income_Predictions <- predict(bkd.Model1, newdata = dsdata_Income_pred)
+Income_Predictions <- predict(fwd.Model1, newdata = dsdata_Income_pred)
 dsdata_Income_pred$MonthlyIncome <- Income_Predictions
 #Exporting Results to .csv
 write.csv(dsdata_Income_pred[,c(1,36)],"Case2Predictions Salary.csv")
